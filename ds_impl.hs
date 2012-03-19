@@ -1,5 +1,8 @@
 -----------------------------------------------------------------------------
 --
+-- Byambatsogt Tumurkhuu
+-- 982768
+--
 -- Module      ::  DSemImp
 -- APL Lab Template in Haskell!!
 --
@@ -19,6 +22,7 @@ module DSemImp where
 import Debug.Trace
 import Test.HUnit 
 import Char
+import Text.Show.Functions
 
 -- --------------------------------------------	--
 -- ---------- Abstract Syntax -----------------	--
@@ -34,6 +38,8 @@ data Command = Skip
                | Cmdcmd   (Command,     Command   )
                | Ifthen   (Expression,  Command, Command)
                | Whiledo  (Expression,  Command   )
+               | Procall  (Ident,       ActualParameter)
+               deriving Show
 
 data Expression = Num Numeral
                   | False_
@@ -45,9 +51,13 @@ data Expression = Num Numeral
                   | Prodof  (Expression,  Expression)
                   | Less    (Expression,  Expression)
                   | Leten   (Declaration, Expression)
+                  | Funcall (Ident,       Expression)
                   deriving Show
 
-data Declaration = Constdef (Ident,  Expression) | Vardef   (Ident,  TypeDef) 
+data Declaration = Constdef  (Ident,  Expression) 
+                   | Vardef  (Ident,  TypeDef) 
+                   | Funcdef (Ident,  FormalParameter, Expression)
+                   | Procdef (Ident,  FormalParameter, Command)
                    deriving Show
 
 data TypeDef = Bool | Int deriving Show
@@ -63,19 +73,37 @@ data Value = IntValue Int | TruthValue  Bool
              deriving (Eq, Show)
 
 type Storable = Value
+type Argument = Value
 
-data Bindable = Const Value | Variable Location
-                deriving (Eq, Show)
+type FunctionType   = Argument -> Store -> Value
+type ProcedureType  = Argument -> Store -> Store
+
+data Bindable = Const Value | Variable Location | Procedure ProcedureType | Function FunctionType
+                deriving (Show) -- deriving (Eq, Show)
+
+instance Eq Bindable where
+  (Procedure p1) == (Procedure p2) = False
+  (Function p1) == (Function p2) = False
+  (Const v1) == (Const v2) = v1 == v2
+  (Variable l1) == (Variable l2) = l1 == l2
 
 data Denotable = Unbound | Bound Bindable
                  deriving (Eq, Show)
 
+data FormalParameter = FormalParameter (Ident, TypeDef) deriving Show
+data ActualParameter = ActualParameter Expression deriving Show
+
 -- --------------------------------------------	--
 -- ---------- Semantic Functions --------------	--
-valuation :: Int         -> Value
-evaluate  :: Expression  -> Environ -> Store ->  Value
-elaborate :: Declaration -> Environ -> Store ->  (Environ, Store)
-execute   :: Command     -> Environ -> Store ->  Store
+valuation     :: Int             -> Value
+evaluate      :: Expression      -> Environ   -> Store ->  Value
+elaborate     :: Declaration     -> Environ   -> Store ->  (Environ, Store)
+execute       :: Command         -> Environ   -> Store ->  Store
+bindParameter :: FormalParameter -> (Argument -> Environ)
+giveArgument  :: ActualParameter -> (Environ  -> Store -> Argument)
+
+bindParameter (FormalParameter(ident, typeDef)) = \arg -> bind(ident, (Const arg))
+giveArgument  (ActualParameter(e)) env sto =  evaluate(e) env sto
 
 -- --------------------------------------------	--
 -- ---------- Auxiliary Semantic Functions ----	--
@@ -127,7 +155,7 @@ find :: (Environ, Ident) -> Bindable
 find  (env, id)  =
   let getbv(Bound bdbl) = bdbl
       getbv(Unbound)    = error ("undefined: " ++ id)
-  in getbv( env id)
+  in  getbv( env id)
 
 overlay :: (Environ, Environ) -> Environ
 overlay  (env', env)  =
@@ -178,11 +206,17 @@ execute ( Ifthen(e, c1, c2) ) env sto =
   else execute(c2) env sto
                   
 execute ( Whiledo(e, c) ) env sto =
-  let dowhile env sto = if evaluate(e) env sto == TruthValue True 
-                        then dowhile env (execute(c) env sto)
+  let doWhile env sto = if evaluate(e) env sto == TruthValue True 
+                        then doWhile env (execute(c) env sto)
                         else sto
-  in  dowhile env sto
+  in  doWhile env sto
 
+execute (Procall(procName, param)) env sto = 
+  let arg =  giveArgument (param) env sto
+      proc = case find(env, procName) of
+             Procedure p -> p
+             _           -> error "Not procedure!"
+  in proc arg sto
 
      			-- simple, just build a Const
 evaluate ( Num(n)  )  env sto  = IntValue n
@@ -224,6 +258,14 @@ evaluate ( Leten(def, e) ) env sto =
   let (env', sto') = elaborate def env sto
   in  evaluate e (overlay (env', env)) sto'
 
+
+evaluate (Funcall(funcName, param)) env sto =  
+  let arg = giveArgument (ActualParameter param) env sto
+      func = case find (env, funcName) of
+             Function f -> f
+             _          -> error "not a function call"
+  in  func arg sto
+
 elaborate ( Constdef(name, e) ) env sto =
   let v = evaluate e env sto
   in  ( bind(name, Const  v), sto )
@@ -231,6 +273,16 @@ elaborate ( Constdef(name, e) ) env sto =
 elaborate ( Vardef(name, tdef) ) env sto =
   let (sto', loc) = allocate sto
   in  ( bind(name, Variable loc), sto' )
+
+elaborate (Funcdef(name, fp, e)) env sto =
+  let func arg sto' = evaluate (e) (overlay (parenv, env)) sto'
+                    where parenv = bindParameter fp arg
+  in (bind(name, Function func), sto)
+
+elaborate (Procdef(procName, fp, c)) env sto =
+  let proc arg sto' = execute (c) (overlay (parenv, env)) sto'
+                    where parenv = bindParameter fp arg
+  in (bind(procName, Procedure proc), sto)
 
 
 ----------------------------------------------------------------------
@@ -241,6 +293,9 @@ elaborate ( Vardef(name, tdef) ) env sto =
 
 dump sto@(Store (lo, hi, d)) = map (\l -> trace (show l) (fetch(sto, l))) [lo..hi]
 
+x = Id("x")
+y = Id("y")
+z = Id("z")
 e1 = Num(2)
 e2 = Sumof(Num(1), Num(2))
 dx = Constdef("x", Num(2))	-- a declaration
@@ -263,9 +318,6 @@ store1 = execute pgm1 env_null sto_null
 
 -------------------------------------------------
 --                pgm2
-x = Id("x")
-y = Id("y")
-z = Id("z")
 pgm2 = Letin( Constdef( "x", Num(2)),
                         Letin( Vardef(  "y", Int),
                                Cmdcmd( Assign( "y", Num(3)),
@@ -297,14 +349,46 @@ pgm3 = Letin(Constdef("x", Num(2)),
             )
 store3 = execute pgm3 env_null sto_null
 -------------------------------------------------
+
+-------------------------------------------------
+--                pgm4
+sqr = Id("sqr")
+pgm4 = Letin(Constdef( "x", Num(3)),
+             Letin( Funcdef("square", FormalParameter("sqr", Int), Prodof(sqr, sqr)),
+                    Letin( Vardef( "y", Int),
+                           Assign( "y", Funcall("square", x))
+                    )
+                  )
+            )
+
+store4 = execute pgm4 env_null sto_null
+-------------------------------------------------
+
+-------------------------------------------------
+--                pgm5
+proc = Id("param")
+pgm5 = Letin(Constdef("x", Num(5)),
+             Letin(Vardef ("y", Int),
+                   Cmdcmd (Assign("y", Num(3)),
+                           Letin(Procdef("addFive", FormalParameter("param", Int), Assign("y", Sumof(y, proc))),
+                                 Procall("addFive", ActualParameter(x))
+                                )
+                           )
+                   )
+             )
+store5 = execute pgm5 env_null sto_null
+-------------------------------------------------
+
                                     
-impTests = TestList [ "test evaluate1" ~: (evaluate e1 env_null sto_null) ~=? (IntValue 2) ,
-                      "test evaluate2" ~: (evaluate e2 env_null sto_null) ~=? (IntValue 3) ,
+impTests = TestList [ "test evaluate1" ~: (evaluate e1 env_null sto_null) ~=? (IntValue 2),
+                      "test evaluate2" ~: (evaluate e2 env_null sto_null) ~=? (IntValue 3),
                       "test evaluate3" ~: (evaluate (Sumof(Num(1), Prodof(Num(2), Num(3)))) env_null sto_null) ~=? (IntValue 7),
                       "test Leten1" ~: (evaluate (Leten(dx, Sumof(Num(1), Id("x")))) env_null sto_null) ~=? (IntValue 3),
                       "test store1" ~: (fetch(store1, 1)) ~=? (IntValue 1), 
                       "test store2" ~: (fetch(store2, 1)) ~=? (IntValue 3),
                       "test store2" ~: (fetch(store2, 2)) ~=? (IntValue 1),
                       "test store3" ~: (fetch(store3, 1)) ~=? (IntValue 0),
-                      "test store3" ~: (fetch(store3, 2)) ~=? (IntValue 6)
+                      "test store3" ~: (fetch(store3, 2)) ~=? (IntValue 6),
+                      "test Function" ~: (fetch(store4, 1)) ~=? (IntValue 9),
+                      "test Procedure" ~: (fetch(store5, 1)) ~=? (IntValue 8)
                     ]
