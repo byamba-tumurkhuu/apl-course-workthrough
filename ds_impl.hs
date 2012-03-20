@@ -193,29 +193,27 @@ execute ( Assign(name, exp) ) env sto  =
      		in  update( sto, loc, rhs)
 
 execute ( Letin(dec, c) ) env sto =
-  let (env', sto') = elaborate(dec) env sto
+  let (env', sto') = elaborate dec env sto
   in  execute (c) (overlay(env', env)) sto'
 
 execute ( Cmdcmd(c1, c2) ) env sto  =
-  let sto' = (execute(c1) env sto)
+  let sto' = execute c1 env sto
   in  execute c2 env sto'
 
 execute ( Ifthen(e, c1, c2) ) env sto =
   if (evaluate(e) env sto) == TruthValue True 
-  then execute(c1) env sto
-  else execute(c2) env sto
+  then execute c1 env sto
+  else execute c2 env sto
                   
 execute ( Whiledo(e, c) ) env sto =
-  let doWhile env sto = if evaluate(e) env sto == TruthValue True 
-                        then doWhile env (execute(c) env sto)
+  let doWhile env sto = if evaluate e env sto == TruthValue True 
+                        then doWhile env (execute c env sto)
                         else sto
   in  doWhile env sto
 
 execute (Procall(procName, param)) env sto = 
-  let arg =  giveArgument (param) env sto
-      proc = case find(env, procName) of
-             Procedure p -> p
-             _           -> error "Not procedure!"
+  let arg =  giveArgument param env sto
+      Procedure proc = find(env, procName)
   in proc arg sto
 
      			-- simple, just build a Const
@@ -230,7 +228,7 @@ evaluate ( Id(n)  )  env sto  = coerc(sto, find(env, n) )
 evaluate ( Sumof(e1,e2) ) env sto =
   let IntValue i1 = evaluate e1 env sto
       IntValue i2 = evaluate e2 env sto
-  in  IntValue  ( add(i1,i2) )
+  in  IntValue ( add(i1, i2) )
 
 evaluate ( Subof(e1,e2) ) env sto =
   let IntValue i1 = evaluate e1 env sto
@@ -261,9 +259,7 @@ evaluate ( Leten(def, e) ) env sto =
 
 evaluate (Funcall(funcName, param)) env sto =  
   let arg = giveArgument (ActualParameter param) env sto
-      func = case find (env, funcName) of
-             Function f -> f
-             _          -> error "not a function call"
+      Function func = find (env, funcName)
   in  func arg sto
 
 elaborate ( Constdef(name, e) ) env sto =
@@ -275,12 +271,12 @@ elaborate ( Vardef(name, tdef) ) env sto =
   in  ( bind(name, Variable loc), sto' )
 
 elaborate (Funcdef(name, fp, e)) env sto =
-  let func arg sto' = evaluate (e) (overlay (parenv, env)) sto'
+  let func arg sto' = evaluate e (overlay (parenv, env)) sto'
                     where parenv = bindParameter fp arg
   in (bind(name, Function func), sto)
 
 elaborate (Procdef(procName, fp, c)) env sto =
-  let proc arg sto' = execute (c) (overlay (parenv, env)) sto'
+  let proc arg sto' = execute c (overlay (parenv, env)) sto'
                     where parenv = bindParameter fp arg
   in (bind(procName, Procedure proc), sto)
 
