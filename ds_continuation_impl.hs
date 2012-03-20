@@ -95,22 +95,17 @@ data FormalParameter = FormalParameter (Ident, TypeDef) deriving Show
 data ActualParameter = ActualParameter Expression deriving Show
 
 -- Continuations
-type CommandCont = Store -> Value
-type ExpressionCont = Storable -> Value
-type DeclarationCont = Environ -> Store -> Value
-type ProcedureCont = Command -> Store -> Value
+type CommandCont     = Store     -> Value
+type ExpressionCont  = Storable  -> CommandCont
+type DeclarationCont = Environ   -> CommandCont
+type ProcedureCont   = Command   -> CommandCont
 
 -- --------------------------------------------	--
 -- ---------- Semantic Functions --------------	--
 valuation     :: Int             -> Value
-evaluate      :: Expression      -> Environ   -> ExpressionCont  -> Store ->  Value
-elaborate     :: Declaration     -> Environ   -> DeclarationCont -> Store ->  Value
-execute       :: Command         -> Environ   -> CommandCont     -> Store ->  Value
-
---bindParameter :: FormalParameter -> (Argument -> Environ)
--- giveArgument  :: ActualParameter -> (Environ  -> Store -> Argument)
--- bindParameter (FormalParameter(ident, typeDef)) = \arg -> bind(ident, (Const arg))
---giveArgument  (ActualParameter(e)) env sto =  evaluate(e) env sto
+evaluate      :: Expression      -> Environ   -> ExpressionCont  -> CommandCont
+elaborate     :: Declaration     -> Environ   -> DeclarationCont -> CommandCont
+execute       :: Command         -> Environ   -> CommandCont     -> CommandCont
 
 -- --------------------------------------------	--
 -- ---------- Auxiliary Semantic Functions ----	--
@@ -192,18 +187,23 @@ sto_null =  Store( 1, 0, sto_init)
 				-- from integer to Const Value
 valuation ( n ) = IntValue(n)
 
-execute ( Skip ) env cont sto = cont sto
+execute ( Skip ) env cont = cont
 
-execute ( Assign(name, exp) ) env cont sto  =
-  let evalCont storabe = update(sto, loc, storabe)
-                         where Variable loc = find(env, name)
-  in evaluate exp env evalCont sto
+execute (Assign(name, exp) ) env cont  = 
+  let Variable loc = find(env, name) 
+      econt storable store = cont (update(store, loc, storable))
+  in reval exp env econt
 
+evaluate ( Num(n) ) env econt  = econt (IntValue n)
 
+elaborate (Vardef(name, tdef) ) env dcont = 
+  let cc sto = dcont env' sto'
+               where (sto', loc) = allocate sto 
+                     env' = bind(name, Variable loc) 
+  in cc 
 
-evaluate ( Num(n) ) env econt sto  = econt (IntValue n)
+deref :: ExpressionCont -> Storable -> Store -> Value
+deref expCont storable sto = expCont storable sto
 
-
-elaborate ( Constdef(name, e) ) env cont sto =
-  let econt r = cont (overlay(bind, name, Const r), env) sto
-  in  evaluate e env econt sto
+reval :: Expression -> Environ -> ExpressionCont -> CommandCont
+reval exp env econt = evaluate exp env (deref econt)
