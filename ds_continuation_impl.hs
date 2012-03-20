@@ -194,6 +194,11 @@ execute (Assign(name, exp) ) env cont  =
       econt storable store = cont (update(store, loc, storable))
   in reval exp env econt
 
+-- execute ( Letin(dec, c) ) env sto =
+--   let (env', sto') = elaborate(dec) env sto
+--   in  execute (c) (overlay(env', env)) sto'
+-- execute (Letin(dec, c)) env cont = 
+
 evaluate ( Num(n) ) env econt  = econt (IntValue n)
 
 elaborate (Vardef(name, tdef) ) env dcont = 
@@ -201,6 +206,7 @@ elaborate (Vardef(name, tdef) ) env dcont =
                where (sto', loc) = allocate sto 
                      env' = bind(name, Variable loc) 
   in cc 
+  
 
 deref :: ExpressionCont -> Storable -> Store -> Value
 deref expCont storable sto = expCont storable sto
