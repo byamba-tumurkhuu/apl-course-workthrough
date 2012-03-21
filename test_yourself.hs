@@ -11,34 +11,13 @@ type Numeral = Int
 type Ident = String
 
 data Command = Skip
-               | Assign   (Ident,       Expression)
-               | Letin    (Declaration, Command   )
-               | Cmdcmd   (Command,     Command   )
-               | Ifthen   (Expression,  Command, Command)
-               | Whiledo  (Expression,  Command   )
-               | Procall  (Ident,       ActualParameter)
                deriving Show
 
-data Expression = Num Numeral
-                  | False_
-                  | True_
-                  | Notexp   Expression
-                  | Id       Ident
-                  | Sumof   (Expression,  Expression)
-                  | Subof   (Expression,  Expression)
-                  | Prodof  (Expression,  Expression)
-                  | Less    (Expression,  Expression)
-                  | Leten   (Declaration, Expression)
-                  | Funcall (Ident,       Expression)
-                  deriving Show
+data Expression =
 
-data Declaration = Constdef  (Ident,  Expression) 
-                   | Vardef  (Ident,  TypeDef) 
-                   | Funcdef (Ident,  FormalParameter, Expression)
-                   | Procdef (Ident,  FormalParameter, Command)
-                   deriving Show
+data Declaration = 
 
-data TypeDef = Bool | Int deriving Show
+data TypeDef = Integer | Boolean deriving show 
 
 -- --------------------------------------------	--
 -- ---------- Semantic Domains ----------------	--
@@ -47,12 +26,12 @@ type Integer = Int
 type Boolean = Bool
 type Location = Int
 
-data Value = 
+data Value = IntValue Integer | TruthValue Boolean deriving show
 
 type Storable = Value
 type Argument = Value
 
-type FunctionType   = 
+type FunctionType   =
 type ProcedureType  =
 
 data Bindable = 

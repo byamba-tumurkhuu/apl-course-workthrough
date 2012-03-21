@@ -96,16 +96,16 @@ data ActualParameter = ActualParameter Expression deriving Show
 
 -- Continuations
 type CommandCont     = Store     -> Value
-type ExpressionCont  = Storable  -> CommandCont
-type DeclarationCont = Environ   -> CommandCont
-type ProcedureCont   = Command   -> CommandCont
+type ExpressionCont  = Storable  -> Value
+type DeclarationCont = Environ   -> Store -> Value
+type ProcedureCont   = Command   -> Store -> Value
 
 -- --------------------------------------------	--
 -- ---------- Semantic Functions --------------	--
-valuation     :: Int             -> Value
-evaluate      :: Expression      -> Environ   -> ExpressionCont  -> CommandCont
-elaborate     :: Declaration     -> Environ   -> DeclarationCont -> CommandCont
-execute       :: Command         -> Environ   -> CommandCont     -> CommandCont
+valuation     :: Int         -> Value
+evaluate      :: Expression  -> Environ -> ExpressionCont  -> Store -> Value
+elaborate     :: Declaration -> Environ -> DeclarationCont -> Store -> Value
+execute       :: Command     -> Environ -> CommandCont     -> Store -> Value
 
 -- --------------------------------------------	--
 -- ---------- Auxiliary Semantic Functions ----	--
@@ -187,29 +187,67 @@ sto_null =  Store( 1, 0, sto_init)
 				-- from integer to Const Value
 valuation ( n ) = IntValue(n)
 
-execute ( Skip ) env cont = cont
+evaluate ( Num(n) ) env econt sto = econt (IntValue n)
+evaluate ( True_  ) env econt sto = econt (TruthValue True)
+evaluate ( False_ ) env econt sto = econt (TruthValue False)
 
-execute (Assign(name, exp) ) env cont  = 
-  let Variable loc = find(env, name) 
-      econt storable store = cont (update(store, loc, storable))
-  in reval exp env econt
+evaluate (Notexp exp) env econt sto = 
+  let econt' = \(TruthValue t) -> econt(TruthValue (not t))
+  in  evaluate exp env econt' sto
 
--- execute ( Letin(dec, c) ) env sto =
+evaluate (Sumof(e1, e2)) env econt sto =
+  let econt' = \(IntValue i1) -> evaluate e2 env (cont'' i1) sto
+              where cont'' i1 = \(IntValue i2) -> econt(IntValue (add(i1, i2)))
+  in  evaluate e1 env econt' sto
+
+evaluate (Subof(e1, e2)) env econt sto =
+  let econt' = \(IntValue i1) -> evaluate e2 env (cont'' i1) sto
+              where cont'' i1 = \(IntValue i2) -> econt(IntValue (diff(i1, i2)))
+  in  evaluate e1 env econt' sto
+
+evaluate (Prodof(e1, e2)) env econt sto =
+  let econt' = \(IntValue i1) -> evaluate e2 env (cont'' i1) sto
+              where cont'' i1 = \(IntValue i2) -> econt(IntValue (prod(i1, i2)))
+  in  evaluate e1 env econt' sto
+
+evaluate (Less(e1, e2)) env econt sto =
+  let econt' = \(IntValue i1) -> evaluate e2 env (cont'' i1) sto
+              where cont'' i1 = \(IntValue i2) -> econt(TruthValue (lessthan(i1, i2)))
+  in  evaluate e1 env econt' sto
+
+evaluate (Id(i)) env econt sto = 
+  let d = find (env, i)
+      f (Const v) = econt(v)
+      f (Variable l) = econt (fetch (sto, l))
+  in  f d
+
+execute ( Skip ) env ccont sto = ccont sto
+
+execute (Assign(name, exp) ) env ccont sto = 
+  let Variable loc = find(env, name)
+      econt = \storable -> ccont (update(sto, loc, storable))
+  in  evaluate exp env econt sto
+
+execute (Cmdcmd(c1, c2)) env ccont sto =
+  let ccont' = \sto' -> execute c2 env ccont sto'
+  in  execute c1 env ccont' sto
+
+--execute (Ifthen(c1, c2, c3)) env ccont sto = 
+
+-- execute ( Letin(dec, c) ) env cont sto =
 --   let (env', sto') = elaborate(dec) env sto
---   in  execute (c) (overlay(env', env)) sto'
--- execute (Letin(dec, c)) env cont = 
+--   in  execute c (overlay(env', env)) sto'
 
-evaluate ( Num(n) ) env econt  = econt (IntValue n)
+-- type ExpressionCont  = Storable  -> Value
+-- type DeclarationCont = Environ   -> Store -> Value
+-- elaborate ( Constdef(name, exp) ) env dcont sto =
+--   let econt = \v -> dcont (bind(name, v)) sto
+--   in  evaluate exp env econt sto
 
-elaborate (Vardef(name, tdef) ) env dcont = 
-  let cc sto = dcont env' sto'
-               where (sto', loc) = allocate sto 
-                     env' = bind(name, Variable loc) 
+elaborate (Vardef(name, tdef) ) env dcont sto = 
+  let cc = dcont env' sto'
+           where (sto', loc) = allocate sto 
+                 env' = bind(name, Variable loc) 
   in cc 
-  
 
-deref :: ExpressionCont -> Storable -> Store -> Value
-deref expCont storable sto = expCont storable sto
 
-reval :: Expression -> Environ -> ExpressionCont -> CommandCont
-reval exp env econt = evaluate exp env (deref econt)
