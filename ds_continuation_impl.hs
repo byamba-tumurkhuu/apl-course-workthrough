@@ -234,9 +234,9 @@ execute (Cmdcmd(c1, c2)) env ccont sto =
 
 --execute (Ifthen(c1, c2, c3)) env ccont sto = 
 
--- execute ( Letin(dec, c) ) env cont sto =
---   let (env', sto') = elaborate(dec) env sto
---   in  execute c (overlay(env', env)) sto'
+execute ( Letin(dec, c) ) env ccont sto =
+  let dcont = \env' -> \sto' -> execute c (overlay(env', env)) ccont sto'
+  in  elaborate dec env dcont sto
 
 -- type ExpressionCont  = Storable  -> Value
 -- type DeclarationCont = Environ   -> Store -> Value
@@ -259,7 +259,5 @@ elaborate (Vardef(name, tdef) ) env dcont sto =
 ----------------------------------------------------------------------
 -- dump sto@(Store (lo, hi, d)) = map (\l -> trace (show l) (fetch(sto, l))) [lo..hi]
 dump sto@(Store (lo, hi, d)) = fetch(sto, 1)
-
-
 
 pgm1 = Letin ( Vardef ("x", Int), Assign("x", Num(3)))
