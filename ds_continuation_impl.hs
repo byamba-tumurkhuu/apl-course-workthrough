@@ -164,32 +164,20 @@ overlay  (env', env)  =
 	\id -> let val = env' id
 	       in  if val /= Unbound then val else env id
 
--- ---------- Etc...
---    coerce a Bindable into a Const..
-coerc :: (Store, Bindable) -> Value
-coerc (sto, Const v)      = v
-coerc (sto, Variable loc) = fetch(sto,loc)
-
--- ---------- Initialize system  ----------
-env_null :: Environ
-env_null =  \i -> Unbound
-
---  store_null =  empty (=0), addressing starts at 1
-sto_init :: DataStore
-sto_init =  \loc -> Unused
-
-sto_null :: Store
-sto_null =  Store( 1, 0, sto_init)
-
 -- --------------------------------------------
 -- ---------- Semantic Equations --------------
 
-				-- from integer to Const Value
 valuation ( n ) = IntValue(n)
 
 evaluate ( Num(n) ) env econt sto = econt (IntValue n)
 evaluate ( True_  ) env econt sto = econt (TruthValue True)
 evaluate ( False_ ) env econt sto = econt (TruthValue False)
+
+evaluate (Id(i)) env econt sto = 
+  let d = find (env, i)
+      f (Const v) = econt(v)
+      f (Variable l) = econt (fetch (sto, l))
+  in  f d
 
 evaluate (Notexp exp) env econt sto = 
   let econt' = \(TruthValue t) -> econt(TruthValue (not t))
@@ -215,11 +203,12 @@ evaluate (Less(e1, e2)) env econt sto =
               where cont'' i1 = \(IntValue i2) -> econt(TruthValue (lessthan(i1, i2)))
   in  evaluate e1 env econt' sto
 
-evaluate (Id(i)) env econt sto = 
-  let d = find (env, i)
-      f (Const v) = econt(v)
-      f (Variable l) = econt (fetch (sto, l))
-  in  f d
+evaluate (Funcall(ident, exp)) env econt sto =
+  let arg = giveArguemt exp env sto
+      Function func = find(env, func)
+  in fun arg sto
+
+
 
 execute ( Skip ) env ccont sto = ccont sto
 
@@ -245,11 +234,9 @@ execute ( Letin(dec, c) ) env ccont sto =
 --   in  evaluate exp env econt sto
 
 elaborate (Vardef(name, tdef) ) env dcont sto = 
-  let cc = dcont env' sto'
-           where (sto', loc) = allocate sto 
-                 env' = bind(name, Variable loc) 
-  in cc 
-
+  let (sto', loc) = allocate sto 
+      env' = bind(name, Variable loc) 
+  in  dcont env' sto'
 
 
 ----------------------------------------------------------------------
@@ -257,6 +244,17 @@ elaborate (Vardef(name, tdef) ) env dcont sto =
 --------------------------- TESTING ----------------------------------
 ---------------------------         ----------------------------------
 ----------------------------------------------------------------------
+-- ---------- Initialize system  ----------
+env_null :: Environ
+env_null =  \i -> Unbound
+
+--  store_null =  empty (=0), addressing starts at 1
+sto_init :: DataStore
+sto_init =  \loc -> Unused
+
+sto_null :: Store
+sto_null =  Store( 1, 0, sto_init)
+
 -- dump sto@(Store (lo, hi, d)) = map (\l -> trace (show l) (fetch(sto, l))) [lo..hi]
 dump sto@(Store (lo, hi, d)) = fetch(sto, 1)
 

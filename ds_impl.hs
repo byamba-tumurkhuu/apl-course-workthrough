@@ -212,7 +212,7 @@ execute ( Whiledo(e, c) ) env sto =
   in  doWhile env sto
 
 execute (Procall(procName, param)) env sto = 
-  let arg =  giveArgument param env sto
+  let arg = giveArgument param env sto
       Procedure proc = find(env, procName)
   in proc arg sto
 
