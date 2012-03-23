@@ -76,8 +76,8 @@ data Value = IntValue Int | TruthValue  Bool
 type Storable = Value
 type Argument = Value
 
-type FunctionType   = Argument -> Store -> Value
-type ProcedureType  = Argument -> Store -> Store
+type FunctionType   = Argument -> ExpressionCont -> Store -> Value
+type ProcedureType  = Argument -> CommandCont    -> Store -> Store
 
 data Bindable = Const Value | Variable Location | Procedure ProcedureType | Function FunctionType
                 deriving (Show) -- deriving (Eq, Show)
@@ -208,10 +208,10 @@ evaluate (Less(e1, e2)) env econt sto =
               where cont'' i1 = \(IntValue i2) -> econt(TruthValue (lessthan(i1, i2)))
   in  evaluate e1 env econt' sto
 
--- evaluate (Funcall(ident, exp)) env econt sto =
---   let ActualParameter arg = giveArgument exp env econt sto
---       Function func = find(env, func)
---   in econt (func arg sto)
+evaluate (Funcall(ident, exp)) env econt sto =
+  let econt' arg = func arg econt sto
+                   where Function func = find(env, ident)
+  in  evaluate exp env econt' sto
 
 execute ( Skip ) env ccont sto = ccont sto
 
@@ -221,7 +221,7 @@ execute (Assign(name, exp) ) env ccont sto =
   in  evaluate exp env econt sto
 
 execute (Cmdcmd(c1, c2)) env ccont sto =
-  let ccont' = \sto' -> execute c2 env ccont sto'
+  let ccont' = execute c2 env ccont
   in  execute c1 env ccont' sto
 
 execute (Ifthen(e, c1, c2)) env ccont sto = 
@@ -243,11 +243,10 @@ elaborate (Vardef(name, tdef) ) env dcont sto =
       env' = bind(name, Variable loc) 
   in  dcont env' sto'
 
--- elaborate (Funcdef(name, fp, e)) env dcont sto =
---   let func arg sto' = evaluate e (overlay (parenv, env)) sto'
---                       where parenv = bindParameter fp arg
---       env' = bind(name, Function func)
---   in dcont env' sto
+elaborate (Funcdef(name, fp, e)) env dcont sto =
+  let func arg = evaluate e (overlay (parenv, env))
+                 where parenv = bindParameter fp arg
+  in dcont (bind(name, Function func)) sto
 
 ----------------------------------------------------------------------
 ---------------------------         ----------------------------------
@@ -265,7 +264,23 @@ sto_init =  \loc -> Unused
 sto_null :: Store
 sto_null =  Store( 1, 0, sto_init)
 
+x = Id("x")
+y = Id("y")
+z = Id("z")
+
 -- dump sto@(Store (lo, hi, d)) = map (\l -> trace (show l) (fetch(sto, l))) [lo..hi]
 dump sto@(Store (lo, hi, d)) = fetch(sto, 1)
 
 pgm1 = Letin ( Vardef ("x", Int), Assign("x", Num(3)))
+
+
+-------------------------------------------------
+--                pgm2
+sqr = Id("sqr")
+pgm2 = Letin(Constdef( "x", Num(3)),
+             Letin( Funcdef("square", FormalParameter("sqr", Int), Prodof(sqr, sqr)),
+                    Letin( Vardef( "y", Int),
+                           Assign( "y", Funcall("square", x))
+                    )
+                  )
+            )
