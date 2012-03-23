@@ -5,7 +5,6 @@
 --
 -- Module      ::  DSemImp
 -- Denotation Semantics Continuation
--- APL Lab Template in Haskell!!
 --
 -- ----------------------------------------------	--
 -- denotational semantics definitions: in Haskell	--
@@ -211,7 +210,11 @@ evaluate (Less(e1, e2)) env econt sto =
 evaluate (Funcall(ident, exp)) env econt sto =
   let econt' arg = func arg econt sto
                    where Function func = find(env, ident)
-  in  evaluate exp env econt' sto
+  in  giveArgument (ActualParameter exp) env econt' sto
+
+evaluate ( Leten(dec, e) ) env econt sto =
+  let dcont = \env' -> \sto' -> evaluate e (overlay(env', env)) econt sto'
+  in  elaborate dec env dcont sto
 
 execute ( Skip ) env ccont sto = ccont sto
 
@@ -234,6 +237,14 @@ execute ( Letin(dec, c) ) env ccont sto =
   let dcont = \env' -> \sto' -> execute c (overlay(env', env)) ccont sto'
   in  elaborate dec env dcont sto
 
+
+execute (Whiledo (e, c) ) env ccont sto = 
+  let ccont' sto' = evaluate e env ccont'' sto'
+                    where ccont'' = \(TruthValue b) -> if b == True 
+                                                       then execute c env ccont' sto' 
+                                                       else ccont sto'
+  in ccont' sto
+
 elaborate ( Constdef(name, exp) ) env dcont sto =
   let econt = \v -> dcont (bind(name, Const v)) sto
   in  evaluate exp env econt sto
@@ -247,6 +258,11 @@ elaborate (Funcdef(name, fp, e)) env dcont sto =
   let func arg = evaluate e (overlay (parenv, env))
                  where parenv = bindParameter fp arg
   in dcont (bind(name, Function func)) sto
+
+-- elaborate (Procdef(procName, fp, c)) env dcont sto =
+--   let proc arg = execute c (overlay (parenv, env))
+--                  where parenv = bindParameter fp arg
+--   in dcont (bind(procName, Procedure proc)) sto
 
 ----------------------------------------------------------------------
 ---------------------------         ----------------------------------
@@ -267,20 +283,69 @@ sto_null =  Store( 1, 0, sto_init)
 x = Id("x")
 y = Id("y")
 z = Id("z")
+e1 = Num(2)
+e2 = Sumof(Num(1), Num(2))
+dx = Constdef("x", Num(2))	-- a declaration
 
--- dump sto@(Store (lo, hi, d)) = map (\l -> trace (show l) (fetch(sto, l))) [lo..hi]
-dump sto@(Store (lo, hi, d)) = fetch(sto, 1)
+dump l sto@(Store (lo, hi, d)) = fetch(sto, l)
 
-pgm1 = Letin ( Vardef ("x", Int), Assign("x", Num(3)))
-
+pgm1 = Letin( Constdef( "x", Num(2)),
+             Letin( Vardef( "y", Int),
+                    Cmdcmd( Assign( "y", Num(3)),
+                            Ifthen( Less(Id("x"), Id("y")), Assign("y", Num(1)), Assign("y", Num(2)))
+                          )
+                  )
+           )
 
 -------------------------------------------------
 --                pgm2
+pgm2 = Letin( Constdef( "x", Num(2)),
+                        Letin( Vardef(  "y", Int),
+                               Cmdcmd( Assign( "y", Num(3)),
+                                       Letin ( Vardef( "z", Int),
+                                               Cmdcmd( Assign("z", Num(0)), Assign("z", Sumof(z, Num(1))))
+                                             )
+                                    )
+                             )
+            )
+-------------------------------------------------
+
+-------------------------------------------------
+--                pgm3
+pgm3 = Letin(Constdef("x", Num(2)),
+             Letin( Vardef("y", Int),
+                    Cmdcmd(Assign("y", Num(3)),
+                           Letin(Vardef("z", Int),
+                                 Cmdcmd(Assign("z", Num(0)),
+                                        Whiledo(Less(Num(0), y),
+                                                Cmdcmd(Assign("z", Sumof(z, x)),
+                                                       Assign("y", Subof(y, Num(1)))
+                                                      )
+                                               )
+                                       )
+                                 )
+                          )
+                  )
+            )
+-------------------------------------------------
+--                pgm4
 sqr = Id("sqr")
-pgm2 = Letin(Constdef( "x", Num(3)),
+pgm4 = Letin(Constdef( "x", Num(3)),
              Letin( Funcdef("square", FormalParameter("sqr", Int), Prodof(sqr, sqr)),
                     Letin( Vardef( "y", Int),
                            Assign( "y", Funcall("square", x))
                     )
                   )
             )
+
+impTests = TestList [ "test evaluate1" ~: (evaluate e1 env_null (\i -> i) sto_null) ~=? (IntValue 2),
+                      "test evaluate2" ~: (evaluate e2 env_null (\i -> i) sto_null) ~=? (IntValue 3),
+                      "test evaluate3" ~: (evaluate (Sumof(Num(1), Prodof(Num(2), Num(3)))) env_null (\i -> i) sto_null) ~=? (IntValue 7),
+                      "test Leten1" ~: (evaluate (Leten(dx, Sumof(Num(1), Id("x")))) env_null (\i -> i) sto_null) ~=? (IntValue 3),
+                      "test store1" ~: execute pgm1 env_null (dump 1) sto_null ~=? (IntValue 1),
+                      "test store2" ~: execute pgm2 env_null (dump 1) sto_null ~=? (IntValue 3),
+                      "test store2" ~: execute pgm2 env_null (dump 2) sto_null ~=? (IntValue 1),
+                      "test while1" ~: execute pgm3 env_null (dump 1) sto_null ~=? (IntValue 0),
+                      "test while2" ~: execute pgm3 env_null (dump 2) sto_null ~=? (IntValue 6),
+                      "test store4" ~: execute pgm4 env_null (dump 1) sto_null ~=? (IntValue 9)
+                    ]
