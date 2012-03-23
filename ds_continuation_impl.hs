@@ -209,9 +209,9 @@ evaluate (Less(e1, e2)) env econt sto =
   in  evaluate e1 env econt' sto
 
 -- evaluate (Funcall(ident, exp)) env econt sto =
---   let arg = giveArgument exp env sto
+--   let ActualParameter arg = giveArgument exp env econt sto
 --       Function func = find(env, func)
---   in func arg sto
+--   in econt (func arg sto)
 
 execute ( Skip ) env ccont sto = ccont sto
 
@@ -245,7 +245,7 @@ elaborate (Vardef(name, tdef) ) env dcont sto =
 
 -- elaborate (Funcdef(name, fp, e)) env dcont sto =
 --   let func arg sto' = evaluate e (overlay (parenv, env)) sto'
---                     where parenv = bindParameter fp arg
+--                       where parenv = bindParameter fp arg
 --       env' = bind(name, Function func)
 --   in dcont env' sto
 
