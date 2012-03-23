@@ -107,6 +107,11 @@ evaluate      :: Expression  -> Environ -> ExpressionCont  -> Store -> Value
 elaborate     :: Declaration -> Environ -> DeclarationCont -> Store -> Value
 execute       :: Command     -> Environ -> CommandCont     -> Store -> Value
 
+bindParameter :: FormalParameter -> Argument -> Environ
+giveArgument  :: ActualParameter -> Environ  -> ExpressionCont -> Store -> Argument
+
+bindParameter (FormalParameter(ident, typeDef)) = \arg -> bind(ident, (Const arg))
+giveArgument  (ActualParameter(e)) env econt sto =  evaluate(e) env econt sto
 -- --------------------------------------------	--
 -- ---------- Auxiliary Semantic Functions ----	--
 add       (x, y) = x + y
@@ -203,12 +208,10 @@ evaluate (Less(e1, e2)) env econt sto =
               where cont'' i1 = \(IntValue i2) -> econt(TruthValue (lessthan(i1, i2)))
   in  evaluate e1 env econt' sto
 
-evaluate (Funcall(ident, exp)) env econt sto =
-  let arg = giveArguemt exp env sto
-      Function func = find(env, func)
-  in fun arg sto
-
-
+-- evaluate (Funcall(ident, exp)) env econt sto =
+--   let arg = giveArgument exp env sto
+--       Function func = find(env, func)
+--   in func arg sto
 
 execute ( Skip ) env ccont sto = ccont sto
 
@@ -221,23 +224,30 @@ execute (Cmdcmd(c1, c2)) env ccont sto =
   let ccont' = \sto' -> execute c2 env ccont sto'
   in  execute c1 env ccont' sto
 
---execute (Ifthen(c1, c2, c3)) env ccont sto = 
+execute (Ifthen(e, c1, c2)) env ccont sto = 
+  let econt = \b -> if b == TruthValue True
+                    then execute c1 env ccont sto
+                    else execute c2 env ccont sto
+  in evaluate e env econt sto
 
 execute ( Letin(dec, c) ) env ccont sto =
   let dcont = \env' -> \sto' -> execute c (overlay(env', env)) ccont sto'
   in  elaborate dec env dcont sto
 
--- type ExpressionCont  = Storable  -> Value
--- type DeclarationCont = Environ   -> Store -> Value
--- elaborate ( Constdef(name, exp) ) env dcont sto =
---   let econt = \v -> dcont (bind(name, v)) sto
---   in  evaluate exp env econt sto
+elaborate ( Constdef(name, exp) ) env dcont sto =
+  let econt = \v -> dcont (bind(name, Const v)) sto
+  in  evaluate exp env econt sto
 
 elaborate (Vardef(name, tdef) ) env dcont sto = 
   let (sto', loc) = allocate sto 
       env' = bind(name, Variable loc) 
   in  dcont env' sto'
 
+-- elaborate (Funcdef(name, fp, e)) env dcont sto =
+--   let func arg sto' = evaluate e (overlay (parenv, env)) sto'
+--                     where parenv = bindParameter fp arg
+--       env' = bind(name, Function func)
+--   in dcont env' sto
 
 ----------------------------------------------------------------------
 ---------------------------         ----------------------------------
