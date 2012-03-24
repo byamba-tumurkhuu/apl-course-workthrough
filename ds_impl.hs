@@ -59,6 +59,7 @@ data Declaration = Constdef  (Ident,  Expression)
                    | Vardef  (Ident,  TypeDef) 
                    | Funcdef (Ident,  FormalParameter, Expression)
                    | Procdef (Ident,  FormalParameter, Command)
+                   | Alias   (Ident, Ident)
                    deriving Show
 
 data TypeDef = Bool | Int deriving Show
@@ -285,6 +286,10 @@ elaborate (Procdef(procName, fp, c)) env sto =
                     where parenv = bindParameter fp arg
   in (bind(procName, Procedure proc), sto)
 
+elaborate (Alias (id1, id2)) env sto =
+  let loc = find(env, id2)
+  in  (overlay(bind(id1, loc), env), sto)
+
 
 ----------------------------------------------------------------------
 ---------------------------         ----------------------------------
@@ -384,6 +389,12 @@ store5 = execute pgm5 env_null sto_null
 --                pgm6
 pgm6 = Letin(Vardef("x", Int), Letin (Vardef("y", Int), DoubleAssign( "x", "y", Num(3), Num(5))))
 store6 = execute pgm6 env_null sto_null
+-------------------------------------------------
+
+-------------------------------------------------
+--                pgm7
+pgm7 = Letin(Vardef("x", Int), Cmdcmd(Assign( "x", Num(5)), Letin(Vardef("y", Int), Letin(Alias("y", "x"), Skip))))
+store7 = execute pgm7 env_null sto_null
 -------------------------------------------------
                                     
 impTests = TestList [ "test evaluate1" ~: (evaluate e1 env_null sto_null) ~=? (IntValue 2),

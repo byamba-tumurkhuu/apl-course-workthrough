@@ -59,6 +59,7 @@ data Declaration = Constdef  (Ident,  Expression)
                    | Vardef  (Ident,  TypeDef) 
                    | Funcdef (Ident,  FormalParameter, Expression)
                    | Procdef (Ident,  FormalParameter, Command)
+                   | Alias   (Ident, Ident)
                    deriving Show
 
 data TypeDef = Bool | Int deriving Show
@@ -77,7 +78,7 @@ type Storable = Value
 type Argument = Value
 
 type FunctionType   = Argument -> ExpressionCont -> Store -> Value
-type ProcedureType  = Argument -> CommandCont    -> Store -> Store
+type ProcedureType  = Argument -> CommandCont    -> Store -> Value
 
 data Bindable = Const Value | Variable Location | Procedure ProcedureType | Function FunctionType
                 deriving (Show) -- deriving (Eq, Show)
@@ -251,6 +252,11 @@ execute (Whiledo (e, c) ) env ccont sto =
                                                        else ccont sto'
   in ccont' sto
 
+execute (Procall(procName, param)) env ccont sto =
+  let econt' arg = proc arg ccont sto
+                   where Procedure proc = find(env, procName)
+  in  giveArgument param env econt' sto
+
 elaborate ( Constdef(name, exp) ) env dcont sto =
   let econt = \v -> dcont (bind(name, Const v)) sto
   in  evaluate exp env econt sto
@@ -265,10 +271,14 @@ elaborate (Funcdef(name, fp, e)) env dcont sto =
                  where parenv = bindParameter fp arg
   in  dcont (bind(name, Function func)) sto
 
--- elaborate (Procdef(procName, fp, c)) env dcont sto =
---   let proc arg = execute c (overlay (parenv, env))
---                  where parenv = bindParameter fp arg
---   in  dcont (bind(procName, Procedure proc))
+elaborate (Procdef(procName, fp, c)) env dcont sto =
+  let proc arg = execute c (overlay (parenv, env))
+                 where parenv = bindParameter fp arg
+  in  dcont (bind(procName, Procedure proc)) sto
+
+elaborate (Alias (id1, id2)) env dcont sto =
+  let loc = find(env, id2)
+  in dcont (overlay(bind(id1, loc), env)) sto
 
 ----------------------------------------------------------------------
 ---------------------------         ----------------------------------
@@ -344,9 +354,23 @@ pgm4 = Letin(Constdef( "x", Num(3)),
                   )
             )
 
+
 -------------------------------------------------
 --                pgm5
-pgm5 = Letin(Vardef("x", Int), Letin (Vardef("y", Int), DoubleAssign( "x", "y", Num(3), Num(5))))
+proc = Id("param")
+pgm5 = Letin(Constdef("x", Num(5)),
+             Letin(Vardef ("y", Int),
+                   Cmdcmd (Assign("y", Num(3)),
+                           Letin(Procdef("addFive", FormalParameter("param", Int), Assign("y", Sumof(y, proc))),
+                                 Procall("addFive", ActualParameter(x))
+                                )
+                           )
+                   )
+             )
+
+-------------------------------------------------
+--                pgm6
+pgm6 = Letin(Vardef("x", Int), Letin (Vardef("y", Int), DoubleAssign( "x", "y", Num(3), Num(5))))
 
 impTests = TestList [ "test evaluate1" ~: (evaluate e1 env_null (\i -> i) sto_null) ~=? (IntValue 2),
                       "test evaluate2" ~: (evaluate e2 env_null (\i -> i) sto_null) ~=? (IntValue 3),
@@ -358,6 +382,7 @@ impTests = TestList [ "test evaluate1" ~: (evaluate e1 env_null (\i -> i) sto_nu
                       "test while1" ~: execute pgm3 env_null (dump 1) sto_null ~=? (IntValue 0),
                       "test while2" ~: execute pgm3 env_null (dump 2) sto_null ~=? (IntValue 6),
                       "test store4" ~: execute pgm4 env_null (dump 1) sto_null ~=? (IntValue 9),
-                      "test doublAssignment1" ~: execute pgm5 env_null (dump 1) sto_null ~=? (IntValue 3),
-                      "test doublAssignment2" ~: execute pgm5 env_null (dump 2) sto_null ~=? (IntValue 5)
+                      "test Procedure" ~: execute pgm5 env_null (dump 1) sto_null ~=? (IntValue 8),
+                      "test doublAssignment1" ~: execute pgm6 env_null (dump 1) sto_null ~=? (IntValue 3),
+                      "test doublAssignment2" ~: execute pgm6 env_null (dump 2) sto_null ~=? (IntValue 5)
                     ]
