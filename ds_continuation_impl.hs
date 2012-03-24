@@ -17,7 +17,7 @@
 -- --------------------------------------------	--
 --
 -----------------------------------------------------------------------------
-module DSemImp where
+module DSemContImp where
 
 import Debug.Trace
 import Test.HUnit 
