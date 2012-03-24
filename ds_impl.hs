@@ -51,7 +51,7 @@ data Expression = Num Numeral
                   | Prodof  (Expression,  Expression)
                   | Less    (Expression,  Expression)
                   | Leten   (Declaration, Expression)
-                  | Funcall (Ident,       Expression)
+                  | Funcall (Ident,       ActualParameter)
                   deriving Show
 
 data Declaration = Constdef  (Ident,  Expression) 
@@ -258,7 +258,7 @@ evaluate ( Leten(def, e) ) env sto =
 
 
 evaluate (Funcall(funcName, param)) env sto =  
-  let arg = giveArgument (ActualParameter param) env sto
+  let arg = giveArgument param env sto
       Function func = find (env, funcName)
   in  func arg sto
 
@@ -352,7 +352,7 @@ sqr = Id("sqr")
 pgm4 = Letin(Constdef( "x", Num(3)),
              Letin( Funcdef("square", FormalParameter("sqr", Int), Prodof(sqr, sqr)),
                     Letin( Vardef( "y", Int),
-                           Assign( "y", Funcall("square", x))
+                           Assign( "y", Funcall("square", ActualParameter x))
                     )
                   )
             )

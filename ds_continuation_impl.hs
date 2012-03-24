@@ -51,7 +51,7 @@ data Expression = Num Numeral
                   | Prodof  (Expression,  Expression)
                   | Less    (Expression,  Expression)
                   | Leten   (Declaration, Expression)
-                  | Funcall (Ident,       Expression)
+                  | Funcall (Ident,       ActualParameter)
                   deriving Show
 
 data Declaration = Constdef  (Ident,  Expression) 
@@ -207,10 +207,10 @@ evaluate (Less(e1, e2)) env econt sto =
               where cont'' i1 = \(IntValue i2) -> econt(TruthValue (lessthan(i1, i2)))
   in  evaluate e1 env econt' sto
 
-evaluate (Funcall(ident, exp)) env econt sto =
+evaluate (Funcall(ident, param)) env econt sto =
   let econt' arg = func arg econt sto
                    where Function func = find(env, ident)
-  in  giveArgument (ActualParameter exp) env econt' sto
+  in  giveArgument param env econt' sto
 
 evaluate ( Leten(dec, e) ) env econt sto =
   let dcont = \env' -> \sto' -> evaluate e (overlay(env', env)) econt sto'
@@ -257,12 +257,12 @@ elaborate (Vardef(name, tdef) ) env dcont sto =
 elaborate (Funcdef(name, fp, e)) env dcont sto =
   let func arg = evaluate e (overlay (parenv, env))
                  where parenv = bindParameter fp arg
-  in dcont (bind(name, Function func)) sto
+  in  dcont (bind(name, Function func)) sto
 
 -- elaborate (Procdef(procName, fp, c)) env dcont sto =
 --   let proc arg = execute c (overlay (parenv, env))
 --                  where parenv = bindParameter fp arg
---   in dcont (bind(procName, Procedure proc)) sto
+--   in  dcont (bind(procName, Procedure proc)) sto
 
 ----------------------------------------------------------------------
 ---------------------------         ----------------------------------
@@ -333,7 +333,7 @@ sqr = Id("sqr")
 pgm4 = Letin(Constdef( "x", Num(3)),
              Letin( Funcdef("square", FormalParameter("sqr", Int), Prodof(sqr, sqr)),
                     Letin( Vardef( "y", Int),
-                           Assign( "y", Funcall("square", x))
+                           Assign( "y", Funcall("square", ActualParameter x))
                     )
                   )
             )

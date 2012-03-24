@@ -11,9 +11,23 @@ type Numeral = Int
 type Ident = String
 
 data Command = Skip
+               | Assign  (Ident, Expression)
+               | Letin   (Declaration, Command)
+               | CmdCmd  (Command, Command)
+               | Ifthen  (Expression, Command, Command)
+               | Whiledo (Expression, Command)
+               | Procall (Ident, ActualParameter)
                deriving Show
 
-data Expression =
+data Expression = Num Numeral 
+                  | Notexp Expression
+                  | Id Ident
+                  | Sumof   (Expression, Expression)
+                  | Subof   (Expression, Expression)
+                  | Prodof  (Expression, Expression)
+                  | Less    (Expression, Expression)
+                  | Leten   (Declaration, Expression)
+                  | Funcall (Ident, Expression)
 
 data Declaration =  
 
