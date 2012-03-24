@@ -99,8 +99,8 @@ valuation     :: Int             -> Value
 evaluate      :: Expression      -> Environ   -> Store ->  Value
 elaborate     :: Declaration     -> Environ   -> Store ->  (Environ, Store)
 execute       :: Command         -> Environ   -> Store ->  Store
-bindParameter :: FormalParameter -> (Argument -> Environ)
-giveArgument  :: ActualParameter -> (Environ  -> Store -> Argument)
+bindParameter :: FormalParameter -> Argument  -> Environ
+giveArgument  :: ActualParameter -> Environ   -> Store -> Argument
 
 bindParameter (FormalParameter(ident, typeDef)) = \arg -> bind(ident, (Const arg))
 giveArgument  (ActualParameter(e)) env sto =  evaluate(e) env sto
@@ -194,7 +194,7 @@ execute ( Assign(name, exp) ) env sto  =
 
 execute ( Letin(dec, c) ) env sto =
   let (env', sto') = elaborate dec env sto
-  in  execute (c) (overlay(env', env)) sto'
+  in  execute c (overlay(env', env)) sto'
 
 execute ( Cmdcmd(c1, c2) ) env sto  =
   let sto' = execute c1 env sto
