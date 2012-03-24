@@ -34,6 +34,7 @@ type Ident = String
 
 data Command = Skip
                | Assign   (Ident,       Expression)
+               | DoubleAssign   (Ident, Ident, Expression, Expression)
                | Letin    (Declaration, Command   )
                | Cmdcmd   (Command,     Command   )
                | Ifthen   (Expression,  Command, Command)
@@ -191,6 +192,10 @@ execute ( Assign(name, exp) ) env sto  =
      		let rhs = evaluate exp env sto
      		    Variable loc = find(env, name)
      		in  update( sto, loc, rhs)
+
+execute (DoubleAssign (name1, name2, exp1, exp2)) env sto = 
+  let sto' = execute (Assign(name1, exp1)) env sto 
+  in  execute (Assign(name2, exp2)) env sto'
 
 execute ( Letin(dec, c) ) env sto =
   let (env', sto') = elaborate dec env sto
@@ -375,6 +380,11 @@ pgm5 = Letin(Constdef("x", Num(5)),
 store5 = execute pgm5 env_null sto_null
 -------------------------------------------------
 
+-------------------------------------------------
+--                pgm6
+pgm6 = Letin(Vardef("x", Int), Letin (Vardef("y", Int), DoubleAssign( "x", "y", Num(3), Num(5))))
+store6 = execute pgm6 env_null sto_null
+-------------------------------------------------
                                     
 impTests = TestList [ "test evaluate1" ~: (evaluate e1 env_null sto_null) ~=? (IntValue 2),
                       "test evaluate2" ~: (evaluate e2 env_null sto_null) ~=? (IntValue 3),
@@ -386,5 +396,7 @@ impTests = TestList [ "test evaluate1" ~: (evaluate e1 env_null sto_null) ~=? (I
                       "test store3" ~: (fetch(store3, 1)) ~=? (IntValue 0),
                       "test store3" ~: (fetch(store3, 2)) ~=? (IntValue 6),
                       "test Function" ~: (fetch(store4, 1)) ~=? (IntValue 9),
-                      "test Procedure" ~: (fetch(store5, 1)) ~=? (IntValue 8)
+                      "test Procedure" ~: (fetch(store5, 1)) ~=? (IntValue 8),
+                      "test DoubleAssign" ~: (fetch(store6, 1)) ~=? (IntValue 3),
+                      "test DoubleAssign" ~: (fetch(store6, 2)) ~=? (IntValue 5)
                     ]

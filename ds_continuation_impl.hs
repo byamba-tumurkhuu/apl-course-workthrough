@@ -34,6 +34,7 @@ type Ident = String
 
 data Command = Skip
                | Assign   (Ident,       Expression)
+               | DoubleAssign(Ident, Ident, Expression, Expression)
                | Letin    (Declaration, Command   )
                | Cmdcmd   (Command,     Command   )
                | Ifthen   (Expression,  Command, Command)
@@ -223,6 +224,11 @@ execute (Assign(name, exp) ) env ccont sto =
       econt = \storable -> ccont (update(sto, loc, storable))
   in  evaluate exp env econt sto
 
+execute (DoubleAssign (name1, name2, exp1, exp2)) env ccont sto = 
+  let ccont' = execute (Assign(name2, exp2)) env ccont
+  in  execute (Assign(name1, exp1)) env ccont' sto
+
+
 execute (Cmdcmd(c1, c2)) env ccont sto =
   let ccont' = execute c2 env ccont
   in  execute c1 env ccont' sto
@@ -262,7 +268,7 @@ elaborate (Funcdef(name, fp, e)) env dcont sto =
 -- elaborate (Procdef(procName, fp, c)) env dcont sto =
 --   let proc arg = execute c (overlay (parenv, env))
 --                  where parenv = bindParameter fp arg
---   in  dcont (bind(procName, Procedure proc)) sto
+--   in  dcont (bind(procName, Procedure proc))
 
 ----------------------------------------------------------------------
 ---------------------------         ----------------------------------
@@ -338,6 +344,10 @@ pgm4 = Letin(Constdef( "x", Num(3)),
                   )
             )
 
+-------------------------------------------------
+--                pgm5
+pgm5 = Letin(Vardef("x", Int), Letin (Vardef("y", Int), DoubleAssign( "x", "y", Num(3), Num(5))))
+
 impTests = TestList [ "test evaluate1" ~: (evaluate e1 env_null (\i -> i) sto_null) ~=? (IntValue 2),
                       "test evaluate2" ~: (evaluate e2 env_null (\i -> i) sto_null) ~=? (IntValue 3),
                       "test evaluate3" ~: (evaluate (Sumof(Num(1), Prodof(Num(2), Num(3)))) env_null (\i -> i) sto_null) ~=? (IntValue 7),
@@ -347,5 +357,7 @@ impTests = TestList [ "test evaluate1" ~: (evaluate e1 env_null (\i -> i) sto_nu
                       "test store2" ~: execute pgm2 env_null (dump 2) sto_null ~=? (IntValue 1),
                       "test while1" ~: execute pgm3 env_null (dump 1) sto_null ~=? (IntValue 0),
                       "test while2" ~: execute pgm3 env_null (dump 2) sto_null ~=? (IntValue 6),
-                      "test store4" ~: execute pgm4 env_null (dump 1) sto_null ~=? (IntValue 9)
+                      "test store4" ~: execute pgm4 env_null (dump 1) sto_null ~=? (IntValue 9),
+                      "test doublAssignment1" ~: execute pgm5 env_null (dump 1) sto_null ~=? (IntValue 3),
+                      "test doublAssignment2" ~: execute pgm5 env_null (dump 2) sto_null ~=? (IntValue 5)
                     ]
