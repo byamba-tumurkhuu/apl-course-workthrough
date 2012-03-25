@@ -32,8 +32,12 @@ import Text.Show.Functions
 type Numeral = Int
 type Ident = String
 
+data SeqData = Goto Ident deriving Show
+
 data Command = Skip
                | Assign   (Ident,       Expression)
+               | AssignCommand   (Ident,       Command)
+               | Seq SeqData
                | DoubleAssign(Ident, Ident, Expression, Expression)
                | Letin    (Declaration, Command   )
                | Cmdcmd   (Command,     Command   )
@@ -80,7 +84,7 @@ type Argument = Value
 type FunctionType   = Argument -> ExpressionCont -> Store -> Value
 type ProcedureType  = Argument -> CommandCont    -> Store -> Value
 
-data Bindable = Const Value | Variable Location | Procedure ProcedureType | Function FunctionType
+data Bindable = Const Value | Variable Location | Procedure ProcedureType | Function FunctionType | CommandContBind CommandCont
                 deriving (Show) -- deriving (Eq, Show)
 
 instance Eq Bindable where
@@ -218,12 +222,22 @@ evaluate ( Leten(dec, e) ) env econt sto =
   let dcont = \env' -> \sto' -> evaluate e (overlay(env', env)) econt sto'
   in  elaborate dec env dcont sto
 
+executeSeq (Goto i) env sto =
+  let CommandContBind ccont = find(env, i)
+  in ccont sto
+
 execute ( Skip ) env ccont sto = ccont sto
+
+execute (Seq s) env ccont sto = executeSeq s env sto
 
 execute (Assign(name, exp) ) env ccont sto = 
   let Variable loc = find(env, name)
       econt = \storable -> ccont (update(sto, loc, storable))
   in  evaluate exp env econt sto
+
+execute (AssignCommand(name, c) ) env ccont sto =
+  let ccont' = execute c (overlay(bind(name, CommandContBind ccont'), env)) ccont 
+  in ccont' sto 
 
 execute (DoubleAssign (name1, name2, exp1, exp2)) env ccont sto = 
   let ccont' = execute (Assign(name2, exp2)) env ccont
@@ -372,6 +386,17 @@ pgm5 = Letin(Constdef("x", Num(5)),
 --                pgm6
 pgm6 = Letin(Vardef("x", Int), Letin (Vardef("y", Int), DoubleAssign( "x", "y", Num(3), Num(5))))
 
+-------------------------------------------------
+--                pgm7
+pgm7 = Letin(Vardef("x", Int), 
+             Cmdcmd(Assign("x", Num(0)), 
+                    AssignCommand("loop", Ifthen(Less(x, Num(10)),
+                                                 Cmdcmd(Assign("x", Sumof(x, Num(1))), Seq (Goto "loop")), 
+                                                 Skip)
+                                 )
+                    )
+             )
+
 impTests = TestList [ "test evaluate1" ~: (evaluate e1 env_null (\i -> i) sto_null) ~=? (IntValue 2),
                       "test evaluate2" ~: (evaluate e2 env_null (\i -> i) sto_null) ~=? (IntValue 3),
                       "test evaluate3" ~: (evaluate (Sumof(Num(1), Prodof(Num(2), Num(3)))) env_null (\i -> i) sto_null) ~=? (IntValue 7),
@@ -384,5 +409,6 @@ impTests = TestList [ "test evaluate1" ~: (evaluate e1 env_null (\i -> i) sto_nu
                       "test store4" ~: execute pgm4 env_null (dump 1) sto_null ~=? (IntValue 9),
                       "test Procedure" ~: execute pgm5 env_null (dump 1) sto_null ~=? (IntValue 8),
                       "test doublAssignment1" ~: execute pgm6 env_null (dump 1) sto_null ~=? (IntValue 3),
-                      "test doublAssignment2" ~: execute pgm6 env_null (dump 2) sto_null ~=? (IntValue 5)
+                      "test doublAssignment2" ~: execute pgm6 env_null (dump 2) sto_null ~=? (IntValue 5),
+                      "test GOTO" ~: execute pgm7 env_null (dump 1) sto_null ~=? (IntValue 10)
                     ]
